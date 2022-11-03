@@ -1,0 +1,14 @@
+version: '3.7'
+services:
+  rocker:
+    build: .
+    image: rocker/geospatial
+    container_name: rsf
+    environment: 
+      - PASSWORD=password
+    ports:
+      - 8787:8787
+    volumes:
+      - .:/home/rstudio
+    tty: true
+    stdin_open: true
