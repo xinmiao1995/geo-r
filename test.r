@@ -119,3 +119,110 @@ dem_extract <- extract(sapporo_dem,
 
 
 
+####
+library(sfnetworks)
+library(sf)
+library(tidygraph)
+library(tidyverse)
+
+# attach the package 'checkpoint'
+library(checkpoint)
+
+# set checkpoint date
+checkpoint("2022-05-29", checkpoint_location = "../", scan_now = FALSE)
+library(osmdata)
+city <-
+  osmdata::getbb("東京都中央区", format_out = "sf_polygon")
+bb <- 
+  osmdata::getbb("東京都中央区") 
+
+q_station <- opq(
+  bbox = bb,
+  timeout = 300)%>%
+  osmdata::add_osm_feature(
+    key = 'railway',
+    value = "station"
+  ) %>%
+  osmdata_sf()
+
+q_road <- opq(
+  bbox = bb,
+  timeout = 300) %>%
+  osmdata::add_osm_feature(
+    key = 'highway',
+    value = c("trunk", "trunk_link", "primary","primary_link", "secondary", "secondary_link", "tertiary","tertiary_link", "residential", "unclassified")
+  ) %>%
+  osmdata_sf()
+
+edge_highway <- q_road$osm_lines
+node_poi <- q_station$osm_points
+
+# network
+# sf: Only sf objects with either exclusively geometries of type LINESTRING or exclusively geometries of type POINT are supported. For lines, is assumed that the given features form the edges. Nodes are created at the endpoints of the lines. Endpoints which are shared between multiple edges become a single node. For points, it is assumed that the given features geometries form the nodes. They will be connected by edges sequentially. Hence, point 1 to point 2, point 2 to point 3, etc.
+net <- as_sfnetwork(edge_highway, directed = FALSE,length_as_weight = TRUE)
+
+# find out the nearest node in the network
+nearest_nodes = st_nearest_feature(node_poi, net)
+
+# Snap geometries of POIs to the network.
+snapped_pois = node_poi %>%
+  st_set_geometry(st_geometry(net)[nearest_nodes])
+net <- st_join(net, snapped_pois)
+
+
+library(ggplot2)
+ggplot2::ggplot() +
+  ggplot2::geom_sf(data = st_as_sf(net,"edges"),col="grey") +
+  ggplot2::geom_sf(data = snapped_pois,col = "blue",size = 3) +
+  ggplot2::geom_sf(data = to_sta,col = "red",size = 2)+
+ggplot2::geom_sf(data = from_sta,col = "red",size = 2)
+
+
+
+# from and to point
+from_sta <- net %>% 
+  st_as_sf() %>%
+  filter(name == "東銀座")
+
+to_sta <- net %>% 
+  st_as_sf() %>%
+  filter(name == "水天宮前")
+
+#path
+paths = st_network_paths(net, from = from_sta, to = to_sta)
+
+path_node_no <- paths %>%
+  slice(1) %>%
+  pull(node_paths) %>%
+  unlist()
+
+path_node_sf <- net %>%
+  activate("nodes") %>%
+  slice(path_node_no) %>%
+  st_as_sf()
+
+path_edge_no <- paths %>%
+  slice(1) %>%
+  pull(edge_paths) %>%
+  unlist()
+
+path_edge_sf <- net %>%
+  activate("edges") %>%
+  slice(path_edge_no) %>%
+  st_as_sf()
+
+
+leaflet() %>% 
+  addTiles("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png") %>% 
+  leaflet::addPolylines(
+    data = st_as_sf(net,"edges"),
+    color ="#165E83",
+    weight = "2",
+    opacity = 0.5) %>%
+  leaflet::addPolylines(
+    data = path_edge_sf,
+    color = "	#B13546",
+    weight="7",
+    opacity = 1) %>%
+  leaflet::addMarkers(data = from_sta) %>%
+  leaflet::addMarkers(data = to_sta)
