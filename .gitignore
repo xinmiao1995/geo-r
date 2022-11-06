@@ -1,0 +1,4 @@
+.config/
+.local/
+.bash_history
+*.RData
