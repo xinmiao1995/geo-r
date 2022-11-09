@@ -1,7 +1,13 @@
+# 1.札幌市中心部の道路網を取得する
+# 市町村単位ではないので座標系でbboxを作成する
 bb <- matrix(c(141.31852,141.38815,43.03581,43.08913), byrow = TRUE, nrow = 2, ncol = 2, dimnames = list(c('x','y'),c('min','max'))) 
+# opq()でクエリをoverpass APIに投げて、sfに変換する
 x <- opq(bbox =bb,timeout='900') %>%
-add_osm_feature(key = 'highway') %>%
-osmdata_sf ()
+  add_osm_feature(key = 'highway') %>%
+  osmdata_sf ()
+edges <- x$osm_lines
+
+# 取得したデータを確認
 leaflet() %>% 
   leaflet::addTiles("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png")  %>% 
   leaflet::addPolylines(
@@ -10,11 +16,13 @@ leaflet() %>%
     weight = "2",
     opacity = 0.5) 
 
-x_line_3100 <- st_transform(x$osm_lines, 3100)
-net <- as_sfnetwork(x_line_3100, directed = FALSE,length_as_weight = TRUE)
+# 2.道路網ポリラインをネットワークに合った形に整形
+# 距離を計算するなので投影座標系に変換する
+# sfnetworkを生成してみる
+net <- as_sfnetwork(st_transform(edges, 3100), directed = FALSE)
 
-net = convert(net, to_spatial_subdivision)
-
+# net <- convert(net, to_spatial_subdivision)
+# 30m以内にあるポイントを一つのクラスターにする
 node_coords = net %>%
   activate("nodes") %>%
   st_coordinates()
@@ -31,18 +39,24 @@ contracted = convert(
   simplify = TRUE
 )
 
-net_simplified = as_sfnetwork(st_as_sf(contracted, "edges") %>% st_transform(4326), directed = FALSE)
-net_simplified <- net_simplified %>% 
+# 新しいネットワークを生成する
+net_simplified <- contracted %>% st_transform(4326) %>% convert(to_spatial_subdivision)
+
+net_simplified = net_simplified %>% 
   activate("edges") %>% 
   mutate(weight = edge_length())
 
-p1 <- get_osm_pnt(bb,'円山公園')
-p2 <- get_osm_pnt(bb,'中島公園駅')
+# 地名でルーティングする
+# osmdataで地名と一致するポイントを取得する
+p1 <- get_osm_pnt(bb,'時計台')
+p2 <- get_osm_pnt(bb,'東札幌駅')
 
+# 一番近隣のnodeを検索
 p1_nearest <- get_nearest_node(p1,net_simplified)
 p2_nearest <- get_nearest_node(p2,net_simplified)
 
-shortest_path = st_network_paths(net_simplified, from = p1, to = p2)
+# 最短ルートを探す
+shortest_path = st_network_paths(net_simplified, from =p1_nearest, to = p2_nearest, type = "shortest")
 node_path <- shortest_path %>%
   slice(1) %>%
   pull(node_paths) %>%
@@ -52,7 +66,6 @@ path_sf <- net_simplified %>%
   activate(nodes) %>% 
   slice(node_path) %>% 
   st_as_sf("edges")
-
 
 leaflet() %>% 
   leaflet::addTiles("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png")  %>% 
@@ -65,9 +78,8 @@ leaflet() %>%
     data = path_sf,
     color = "	#B13546",
     weight="7",
-    opacity = 1)%>%
-  addMarkers(data = p1)%>%
-  addMarkers(data = p2)
+    opacity = 1)
+
 
 get_osm_pnt <- function(bb,x){
   p <- opq(bbox = bb,timeout='900') %>%
@@ -77,18 +89,15 @@ get_osm_pnt <- function(bb,x){
 }
 
 get_nearest_node <- function(poi,n){
-  nodes <- st_as_sf(n, "nodes") %>% st_transform(4326)
-  return(nodes[st_nearest_feature(poi %>% st_transform(4326),net %>% st_transform(4326)),])
+  nodes <- st_as_sf(n, "nodes")
+  return(st_nearest_feature(poi,nodes))
 }
 
 # 任意ポイントから一定距離の範囲を探す
-nodes = activate(net_simplified, "nodes")%>% st_transform(4326)
-p_centroid = net %>%
-  st_geometry() %>%
-  st_combine() %>%
-  st_centroid()%>% st_transform(4326)
+nodes = activate(net_simplified, "nodes")
+p <-st_as_sf(net_simplified, "nodes")[get_osm_pnt(bb,'時計台')%>%get_nearest_node(net_simplified),]
 iso = nodes %>%
-  filter(node_distance_from(st_nearest_feature(p_centroid, nodes), weights = weight) <= 2000)
+  filter(node_distance_from(st_nearest_feature(p, nodes), weights = weight) <= 1000)
 
 iso_poly = iso %>%
   st_geometry() %>%
@@ -107,7 +116,7 @@ leaflet() %>%
     color = "	#B13546",
     weight="7",
     opacity = 1)%>%
-  addMarkers(data = p_centroid)
+  addMarkers(data = p)
 
 # draw cut nodes and edges
 library(igraph)
