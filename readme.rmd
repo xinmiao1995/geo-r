@@ -1,17 +1,3 @@
----
-title: "サンプル・レポート"
-author: "Taguchi"
-date: '`r format(Sys.time(), "%y/%m/%d %H:%M")`'
-output:
-  html_document:
-    toc: yes
-  word_document:
-    toc: yes
----
-# 初めに
-
-メリット
-
 # 利用するライブラリー
 ## osmdata
 - overpass APIを使ってOSMデータ(ベクター)をダウンロードできるライブラリー
@@ -38,13 +24,17 @@ library(osmdata)
   - The spatial data, consisting of osm_points, osm_lines, osm_polygons, osm_multilines and osm_multipolygons.
 
 ## sfnetworks
-- sfnetworksはネットワーク解析パッケージtidygraphと空間データパッケージsfを繋げている（pic）
+- sfnetworksはネットワーク解析パッケージtidygraphと空間データパッケージsfを繋げている
+- CRANからインストールできる
+```{r setup, include=FALSE}
+install.packages("sfnetworks")
+library(sfnetworks)        
+``` 
   - networkとラインデータの違い
     - network
       - nodeだけハンドリングすれば良い
     - ラインデータ
       - 座標・座標系を持つ
-- CRANからインストールできる`install.packages("sfnetwork")`
 - sfnetworksの生成
   - From a nodes and edges table
   - From an sf object with linestring geometries
@@ -60,28 +50,13 @@ library(osmdata)
 ## Visulization
 - leaflet
 
-# osmdata X sfnetworks
-- 
 
-
-
-行内へのRコード埋め込み
-
-今日は `r format(Sys.Date(), "%Y/%m/%d")` です
-
-箇条書き
-
-* 箇条書き1
-* 箇条書き2
-
-
-## グラフ
-サンプルデータ(diamond)の箱ひげ図を表示
-
-```{r}
-graph_data <- ggplot(diamonds, aes(y=carat,x=cut, fill=cut))+geom_boxplot()
-plot(graph_data)
+## RStudio環境を立ち上げる
+- Docekrの起動
+```sh
+cd ./
+docker-compose up --build -d 
 ```
-
-##リンク
-[R Markdown](http://rmarkdown.rstudio.com/)
+- ローカルホストにアクセル
+- 
+http://localhost:8787/
