@@ -57,6 +57,6 @@ library(sfnetworks)
 cd ./
 docker-compose up --build -d 
 ```
-- ローカルホストにアクセル
+- ローカルホストにアクセス
  
 http://localhost:8787/
